@@ -121,7 +121,7 @@ impl Transport {
                             }
                         }
 
-                        match serde_json::from_value::<WsEvent>(raw) {
+                        match serde_json::from_value::<WsEvent>(raw.clone()) {
                             Ok(WsEvent::KeepaliveResponse {}) => {}
                             Ok(WsEvent::Error { message, .. }) => {
                                 if is_fatal_server_error(&message) {
@@ -135,7 +135,14 @@ impl Transport {
                                     break;
                                 }
                             }
-                            Err(e) => debug!("failed to decode event: {e}"),
+                            Err(e) => {
+                                let kind = raw.get("_type").and_then(|v| v.as_str()).unwrap_or("?");
+                                if kind == "SessionMetadata" {
+                                    warn!("failed to decode SessionMetadata: {e}; raw={raw}");
+                                } else {
+                                    debug!("failed to decode event {kind}: {e}");
+                                }
+                            }
                         }
                     }
                     Ok(Message::Close(frame)) => {

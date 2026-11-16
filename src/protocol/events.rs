@@ -1,7 +1,18 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
 use crate::types::{CurrencyItem, EntityPosition, Reaction, RoomInfo, User};
+
+/// Treats an explicit JSON `null` the same as a missing field (uses `Default`).
+/// Highrise sends `"sdk_version": null` in `SessionMetadata`, which a plain
+/// `#[serde(default)] String` rejects, silently dropping the whole event.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 /// All incoming WebSocket frames from `wss://highrise.game/web/botapi`.
 #[derive(Debug, Clone, Deserialize)]
@@ -9,13 +20,13 @@ use crate::types::{CurrencyItem, EntityPosition, Reaction, RoomInfo, User};
 pub enum WsEvent {
     SessionMetadata {
         user_id: String,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "null_as_default")]
         room_info: RoomInfo,
         #[serde(default)]
         rate_limits: Value,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "null_as_default")]
         connection_id: String,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "null_as_default")]
         sdk_version: String,
     },
     ChatEvent {
