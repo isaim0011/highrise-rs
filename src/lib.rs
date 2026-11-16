@@ -5,6 +5,7 @@ pub mod client;
 pub mod error;
 pub mod mcp;
 pub mod protocol;
+pub mod tools;
 pub mod transport;
 pub mod types;
 pub mod webapi;
@@ -14,6 +15,10 @@ pub use api::Highrise;
 pub use client::{BotHandler, BoxFuture, Client, Config};
 pub use error::{Error, Result};
 pub use protocol::{WsEvent, WsRequest};
+pub use tools::{
+    BotSpec, BotStatus, ClusterHandle, CommandContext, CommandError, CommandManager, CommandMeta,
+    DanceFloorManager, DanceFloorZone, DanceMode, Emote, Emotes, HighriseCluster, Role,
+};
 pub use types::{
     AnchorPosition, BuyResult, Conversation, CurrencyItem, DirectMessage, EntityPosition, Facing,
     GoldBar, Item, Message, MessageMedia, OutfitItem, Position, Reaction, RoomInfo,

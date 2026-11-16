@@ -89,6 +89,17 @@ const DOCS: &[DocEntry] = &[
                highrise-rs Client::run() automatically reconnects with exponential backoff (2s..30s) \
                and stops only on fatal auth/permission errors (invalid token, missing designer rights).",
     },
+    DocEntry {
+        id: "tools_and_dynamic_dx",
+        section: "guides",
+        title: "Tools: CommandManager, DanceFloorManager, Emotes, HighriseCluster & Dynamic Helpers",
+        body: "Dynamic @username helpers on Highrise: find_user(\"@name\"), user_position(\"@name\"), \
+               goto_user(\"@name\"), bring_user(\"@target\", \"@dest\"), emote_user(\"Macarena\", \"@target\", &emotes).\n\
+               DanceFloorManager: 3D zones (set_zone_from_users), modes Fixed / SyncRandom / PerUserRandom, 60ms pacing.\n\
+               CommandManager: multi-prefix, longest-match subcommands, Role hierarchy (Member..Creator), \
+               live allow/deny/role/cooldown overrides, ctx.mentions() & ctx.target_arg(0).\n\
+               HighriseCluster: run multiple bots concurrently on Tokio JoinSet with ClusterHandle::shutdown().",
+    },
 ];
 
 pub fn search_docs(query: &str, section: Option<&str>) -> String {
@@ -157,7 +168,8 @@ async fn fetch_example() -> highrise_rs::Result<()> {
         }
         "moderation" => "BotHandler::on_moderate + Highrise::kick(&uid), mute(&uid, secs), ban(&uid, secs), unban(&uid), set_privilege(&uid, RoomPermissions { moderator, designer }).".to_string(),
         "economy" => "Use tip(&uid, GoldBar::G10), wallet(), inventory(), buy_item(&item_id), buy_room_boost(amount), buy_voice_time().".to_string(),
-        _ => "Available topics: quickstart, webapi, colors, moderation, economy.".to_string(),
+        "tools" | "cluster" | "dancefloor" | "commands" => "Use HighriseCluster::add_bot(BotSpec, handler), CommandManager::new([\"/\", \"!\"]), DanceFloorManager::set_zone_from_users(), Emotes::resolve(), and api.bring_user(\"@target\", \"@dest\").".to_string(),
+        _ => "Available topics: quickstart, webapi, colors, moderation, economy, tools.".to_string(),
     }
 }
 

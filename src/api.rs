@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::protocol::requests::{AnchorTarget, Destination, WsRequest};
+use crate::tools::emotes::Emotes;
 use crate::transport::Transport;
 use crate::types::{
-    BuyResult, Conversation, CurrencyItem, DirectMessage, Facing, GoldBar, MessageMedia,
-    OutfitItem, Reaction, RoomPermissions, RoomUser, VoiceChatStatus,
+    BuyResult, Conversation, CurrencyItem, DirectMessage, EntityPosition, Facing, GoldBar,
+    MessageMedia, OutfitItem, Position, Reaction, RoomPermissions, RoomUser, VoiceChatStatus,
 };
 
 /// Ergonomic async handle for Highrise room actions (passed to `BotHandler` callbacks).
@@ -466,5 +467,73 @@ impl Highrise {
             .error_for_status()?;
 
         Ok(meta)
+    }
+
+    // ------------------------------------------------------------------
+    // Dynamic user-friendly helpers (resolve @username & positions)
+    // ------------------------------------------------------------------
+
+    /// Finds a user currently in the room by `user_id`, `@username`, or `username` (case-insensitive).
+    pub async fn find_user(&self, name_or_id: &str) -> Result<Option<RoomUser>> {
+        let needle = name_or_id.trim().trim_start_matches('@');
+        if needle.is_empty() {
+            return Ok(None);
+        }
+        let users = self.room_users().await?;
+        Ok(users.into_iter().find(|ru| {
+            ru.user.id == needle || ru.user.username.eq_ignore_ascii_case(needle)
+        }))
+    }
+
+    /// Resolves a user's live floor `Position` by `user_id` or `@username`.
+    pub async fn user_position(&self, name_or_id: &str) -> Result<Option<Position>> {
+        let Some(ru) = self.find_user(name_or_id).await? else {
+            return Ok(None);
+        };
+        Ok(match ru.position {
+            EntityPosition::Floor(p) => Some(p),
+            EntityPosition::Anchor(_) => None,
+        })
+    }
+
+    /// Teleports the bot itself directly to `@target`'s live position.
+    pub async fn goto_user(&self, target_name_or_id: &str) -> Result<()> {
+        let pos = self
+            .user_position(target_name_or_id)
+            .await?
+            .ok_or_else(|| Error::Server(format!("position not found for {target_name_or_id}")))?;
+        self.teleport(self.bot_id.clone(), pos.x, pos.y, pos.z, pos.facing)
+            .await
+    }
+
+    /// Teleports `@target` directly to `@destination_user`'s live position.
+    pub async fn bring_user(&self, target_name_or_id: &str, to_user_name_or_id: &str) -> Result<()> {
+        let target = self
+            .find_user(target_name_or_id)
+            .await?
+            .ok_or_else(|| Error::Server(format!("user not found: {target_name_or_id}")))?;
+        let dest = self
+            .user_position(to_user_name_or_id)
+            .await?
+            .ok_or_else(|| Error::Server(format!("position not found for {to_user_name_or_id}")))?;
+        self.teleport(target.user.id, dest.x, dest.y, dest.z, dest.facing)
+            .await
+    }
+
+    /// Resolves an emote (number, ID, or name) and `@target` in one call and plays it.
+    pub async fn emote_user(
+        &self,
+        emote_query: &str,
+        target_name_or_id: &str,
+        emotes: &Emotes,
+    ) -> Result<()> {
+        let emote = emotes
+            .resolve(emote_query)
+            .ok_or_else(|| Error::Server(format!("unknown emote: {emote_query}")))?;
+        let target = self
+            .find_user(target_name_or_id)
+            .await?
+            .ok_or_else(|| Error::Server(format!("user not found: {target_name_or_id}")))?;
+        self.emote(emote.id, target.user.id).await
     }
 }

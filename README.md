@@ -3,8 +3,14 @@
 Fast, async Rust SDK for the **Highrise Bot WebSocket API**, **Highrise Web REST API**, plus a built-in **`highrise_mcp`** stdio MCP server.
 
 ## Features
-- **Full Bot WebSocket API**: All 30 Publish endpoints (plus `IndicatorRequest`, `ChangeBackpackRequest`, `SendBulkMessageRequest`) and all 12 Subscribe events (`SessionMetadata`, `ChatEvent`, `MessageEvent`, `UserJoinedEvent`, `UserLeftEvent`, `UserMovedEvent`, `EmoteEvent`, `ReactionEvent`, `TipReactionEvent`, `VoiceEvent`, `RoomModeratedEvent`, `ChannelEvent`).
+- **Full Bot WebSocket API**: All 30 Publish endpoints (plus `IndicatorRequest`, `ChangeBackpackRequest`, `SendBulkMessageRequest`, `upload_media`, `send_invite`) and all 12 Subscribe events.
 - **Full Web REST API (`WebApi`)**: All 12 endpoints across `Users`, `Rooms`, `Posts`, `Items` (including `/items/search`), `Grabs`, and `Conversations`, with cursor pagination and HTTP `429` handling.
+- **Production Bot Tools (`highrise_rs::tools`)**:
+  - `CommandManager`: Multi-prefix, longest-match subcommands, aliases, `Role` hierarchy (`Member < Vip < Mod < Owner < Creator`), runtime overrides, and cooldowns.
+  - `DanceFloorManager`: 3D bounding-box zones (`Fixed`, `SyncRandom`, `PerUserRandom`) + `set_zone_from_users()`.
+  - `Emotes`: Standard Highrise emote catalog with lookup by number, ID, or name + `block()`.
+  - `HighriseCluster`: Multi-bot Tokio supervisor with `ClusterHandle::shutdown()` and live status tracking.
+  - **Dynamic DX helpers**: `find_user("@name")`, `user_position("@name")`, `goto_user("@name")`, `bring_user("@target", "@dest")`, `emote_user("1", "@target", &emotes)`.
 - **Built-in MCP Server (`highrise_mcp`)**: Offline docs, endpoint lookup, safe Highrise `<#RRGGBB>` hex color formatting, Unicode bold, and `<= 250`-char message chunking.
 
 ## Quickstart
