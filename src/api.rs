@@ -51,6 +51,27 @@ impl Highrise {
                 conversation_id: conversation_id.into(),
                 content: content.into(),
                 msg_type: "text",
+                room_id: None,
+                world_id: None,
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Sends a room or world invite in a direct message conversation (`type: "invite"`).
+    pub async fn send_invite(
+        &self,
+        conversation_id: impl Into<String>,
+        room_id: Option<String>,
+        world_id: Option<String>,
+    ) -> Result<()> {
+        self.transport
+            .request(&WsRequest::SendMessageRequest {
+                conversation_id: conversation_id.into(),
+                content: String::new(),
+                msg_type: "invite",
+                room_id,
+                world_id,
             })
             .await?;
         Ok(())
@@ -409,5 +430,41 @@ impl Highrise {
             .await?;
         let raw = val.get("media").cloned().unwrap_or(val);
         Ok(serde_json::from_value(raw)?)
+    }
+
+    /// Full 2-step media upload: requests a pre-signed URL, PUTs the raw bytes,
+    /// and returns the resulting `MessageMedia` (with `media_id`).
+    pub async fn upload_media(
+        &self,
+        bytes: Vec<u8>,
+        mime_type: impl Into<String>,
+        width: Option<u32>,
+        height: Option<u32>,
+    ) -> Result<MessageMedia> {
+        let mime = mime_type.into();
+        let meta = self
+            .request_media_upload(MessageMedia {
+                media_id: None,
+                upload_url: None,
+                mime_type: mime.clone(),
+                width,
+                height,
+            })
+            .await?;
+
+        let upload_url = meta
+            .upload_url
+            .as_deref()
+            .ok_or_else(|| crate::error::Error::Server("missing upload_url in MessageMediaResponse".into()))?;
+
+        reqwest::Client::new()
+            .put(upload_url)
+            .header("Content-Type", mime)
+            .body(bytes)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(meta)
     }
 }

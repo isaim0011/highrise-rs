@@ -18,6 +18,10 @@ pub enum WsRequest {
         content: String,
         #[serde(rename = "type")]
         msg_type: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        room_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        world_id: Option<String>,
     },
     EmoteRequest {
         emote_id: String,
