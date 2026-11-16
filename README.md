@@ -1,0 +1,45 @@
+# highrise-rs
+
+Fast, async Rust SDK for the **Highrise Bot WebSocket API**, **Highrise Web REST API**, plus a built-in **`highrise_mcp`** stdio MCP server.
+
+## Features
+- **Full Bot WebSocket API**: All 30 Publish endpoints (plus `IndicatorRequest`, `ChangeBackpackRequest`, `SendBulkMessageRequest`) and all 12 Subscribe events (`SessionMetadata`, `ChatEvent`, `MessageEvent`, `UserJoinedEvent`, `UserLeftEvent`, `UserMovedEvent`, `EmoteEvent`, `ReactionEvent`, `TipReactionEvent`, `VoiceEvent`, `RoomModeratedEvent`, `ChannelEvent`).
+- **Full Web REST API (`WebApi`)**: All 12 endpoints across `Users`, `Rooms`, `Posts`, `Items` (including `/items/search`), `Grabs`, and `Conversations`, with cursor pagination and HTTP `429` handling.
+- **Built-in MCP Server (`highrise_mcp`)**: Offline docs, endpoint lookup, safe Highrise `<#RRGGBB>` hex color formatting, Unicode bold, and `<= 250`-char message chunking.
+
+## Quickstart
+
+```rust
+use highrise_rs::{BotHandler, BoxFuture, Client, Config, Highrise, SessionMetadata, User};
+
+struct EchoBot;
+
+impl BotHandler for EchoBot {
+    fn on_ready<'a>(&'a self, _api: &'a Highrise, meta: SessionMetadata) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            println!("Connected as {} in {}", meta.user_id, meta.room_info.room_name);
+        })
+    }
+
+    fn on_chat<'a>(&'a self, api: &'a Highrise, user: User, message: String) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if message == "!ping" {
+                let _ = api.whisper(&user.id, "Pong!").await;
+            }
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let token = std::env::var("API_TOKEN").expect("API_TOKEN required");
+    let room_id = std::env::var("ROOM_ID").expect("ROOM_ID required");
+    Client::new(Config::new(token, room_id), EchoBot).run().await.unwrap();
+}
+```
+
+## MCP Server
+
+```bash
+cargo run --bin highrise_mcp
+```
