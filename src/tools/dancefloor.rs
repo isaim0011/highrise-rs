@@ -165,7 +165,7 @@ impl DanceFloorManager {
             .collect()
     }
 
-    /// Runs one dancefloor tick (paced at 60ms per user to respect Highrise rate limits).
+    /// Runs one dancefloor tick, sending emotes to all dancers concurrently.
     pub async fn step(&self, api: &Highrise, emotes: &Emotes) {
         let (enabled, mode, dances_only, dancers) = {
             let st = self.inner.read().await;
@@ -199,19 +199,24 @@ impl DanceFloorManager {
             DanceMode::PerUserRandom => None,
         };
 
-        for (ix, uid) in dancers.iter().enumerate() {
-            let emote_id = match shared_emote {
-                Some(id) => id,
-                None => match emotes.pick_random(dances_only, base_seed.wrapping_add(ix as u64 * 31)) {
-                    Some(e) => e.id.as_str(),
-                    None => continue,
-                },
+        let mut set = tokio::task::JoinSet::new();
+        for (ix, uid) in dancers.into_iter().enumerate() {
+            let Some(emote_id) = (match shared_emote {
+                Some(id) => Some(id.to_string()),
+                None => emotes
+                    .pick_random(dances_only, base_seed.wrapping_add(ix as u64 * 31))
+                    .map(|e| e.id.clone()),
+            }) else {
+                continue;
             };
-            if let Err(e) = api.emote(emote_id, uid).await {
-                debug!("dancefloor emote failed for {uid}: {e}");
-            }
-            time::sleep(Duration::from_millis(60)).await;
+            let api = api.clone();
+            set.spawn(async move {
+                if let Err(e) = api.emote(&emote_id, &uid).await {
+                    debug!("dancefloor emote failed for {uid}: {e}");
+                }
+            });
         }
+        while set.join_next().await.is_some() {}
     }
 
     /// Spawns a background dancefloor loop task.
