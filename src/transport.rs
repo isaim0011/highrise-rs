@@ -55,7 +55,7 @@ impl Transport {
 
         let (ws_stream, _) = time::timeout(CONNECT_TIMEOUT, connect_async(req))
             .await
-            .map_err(|_| Error::Timeout("websocket connect".into()))??;
+            .map_err(|_| Error::Timeout)??;
         let (mut ws_sink, mut ws_source) = ws_stream.split();
 
         let (out_tx, mut out_rx) = mpsc::channel::<String>(128);
@@ -103,7 +103,7 @@ impl Transport {
                     Ok(None) => break,
                     Err(_) => {
                         warn!("no websocket frames or keepalive responses for {READ_TIMEOUT:?}; closing zombie connection");
-                        let _ = evt_tx.send(Err(Error::Timeout("keepalive read".into()))).await;
+                        let _ = evt_tx.send(Err(Error::Timeout)).await;
                         break;
                     }
                 };
