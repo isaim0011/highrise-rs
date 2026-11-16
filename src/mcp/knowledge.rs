@@ -168,7 +168,7 @@ async fn fetch_example() -> highrise_rs::Result<()> {
         }
         "moderation" => "BotHandler::on_moderate + Highrise::kick(&uid), mute(&uid, secs), ban(&uid, secs), unban(&uid), set_privilege(&uid, RoomPermissions { moderator, designer }).".to_string(),
         "economy" => "Use tip(&uid, GoldBar::G10), wallet(), inventory(), buy_item(&item_id), buy_room_boost(amount), buy_voice_time().".to_string(),
-        "tools" | "cluster" | "dancefloor" | "commands" => "Use HighriseCluster::add_bot(BotSpec, handler), CommandManager::new([\"/\", \"!\"]), DanceFloorManager::set_zone_from_users(), Emotes::resolve(), and api.bring_user(\"@target\", \"@dest\").".to_string(),
+        "tools" | "cluster" | "dancefloor" | "commands" => "Use HighriseCluster::add_bot(BotSpec, handler), CommandManager::new([\"/\", \"!\"]), DanceFloorManager::set_zone_from_users(), Emotes::sync_pack(EmotePack::Free | EmotePack::All), ItemCatalog::sync_from_github(), and api.bring_user(\"@target\", \"@dest\").".to_string(),
         _ => "Available topics: quickstart, webapi, colors, moderation, economy, tools.".to_string(),
     }
 }

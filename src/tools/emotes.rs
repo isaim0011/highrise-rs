@@ -1,67 +1,53 @@
 use std::collections::HashSet;
 
-/// Standard Highrise emote metadata.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Emote {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub duration_secs: f32,
-    pub is_dance: bool,
+use serde::{Deserialize, Serialize};
+
+use crate::error::Result;
+
+const FREE_EMOTES_JSON: &str = include_str!("data/emotes_free.json");
+const ALL_EMOTES_JSON: &str = include_str!("data/emotes_all.json");
+
+/// Live upstream free-emotes JSON maintained at `Djxhknz/Ids-highrise`.
+pub const DEFAULT_EMOTES_URL: &str =
+    "https://raw.githubusercontent.com/Djxhknz/Ids-highrise/main/emotes.json";
+
+/// Built-in emote pack selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EmotePack {
+    /// 280 free Highrise emotes (usable by any bot/player without owning paid emotes).
+    #[default]
+    Free,
+    /// Full 371+ catalog (free + paid emotes).
+    All,
 }
 
-/// Curated standard Highrise emotes with lookup by 1-based number, ID, or name.
+/// Highrise emote metadata (owned strings so catalogs can be imported dynamically).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Emote {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_duration")]
+    pub duration: f32,
+    #[serde(default)]
+    pub is_free: bool,
+}
+
+fn default_duration() -> f32 {
+    3.0
+}
+
+impl Emote {
+    pub fn is_dance(&self) -> bool {
+        self.id.starts_with("dance-") || self.id.contains("dance")
+    }
+}
+
+/// Dynamic emote catalog with Free/All packs, JSON/URL import, blocklist, and lookup.
 #[derive(Debug, Clone)]
 pub struct Emotes {
     items: Vec<Emote>,
     blocked: HashSet<String>,
 }
-
-const STANDARD_EMOTES: &[Emote] = &[
-    Emote { id: "dance-macarena", name: "Macarena", duration_secs: 12.2, is_dance: true },
-    Emote { id: "dance-tiktok8", name: "Savage Dance", duration_secs: 10.9, is_dance: true },
-    Emote { id: "dance-tiktok2", name: "Don't Start Now", duration_secs: 10.4, is_dance: true },
-    Emote { id: "dance-tiktok9", name: "Viral Groove", duration_secs: 11.8, is_dance: true },
-    Emote { id: "dance-tiktok10", name: "Shuffle", duration_secs: 8.2, is_dance: true },
-    Emote { id: "dance-blackpink", name: "Shut Down", duration_secs: 7.2, is_dance: true },
-    Emote { id: "dance-russian", name: "Russian Dance", duration_secs: 10.2, is_dance: true },
-    Emote { id: "dance-breakdance", name: "Breakdance", duration_secs: 17.6, is_dance: true },
-    Emote { id: "dance-floss", name: "Floss", duration_secs: 21.3, is_dance: true },
-    Emote { id: "dance-pennywise", name: "Pennywise", duration_secs: 1.2, is_dance: true },
-    Emote { id: "dance-weird", name: "Weird Dance", duration_secs: 21.6, is_dance: true },
-    Emote { id: "dance-zombie", name: "Zombie Dance", duration_secs: 12.9, is_dance: true },
-    Emote { id: "dance-shoppingcart", name: "Let's Go Shopping", duration_secs: 4.3, is_dance: true },
-    Emote { id: "dance-kawai", name: "Kawaii", duration_secs: 10.3, is_dance: true },
-    Emote { id: "dance-orangejustice", name: "Orange Justice", duration_secs: 6.5, is_dance: true },
-    Emote { id: "emote-wave", name: "Wave", duration_secs: 2.7, is_dance: false },
-    Emote { id: "emote-hello", name: "Hello", duration_secs: 2.7, is_dance: false },
-    Emote { id: "emote-hug", name: "Hug", duration_secs: 4.0, is_dance: false },
-    Emote { id: "emote-kiss", name: "Kiss", duration_secs: 3.9, is_dance: false },
-    Emote { id: "emote-shy", name: "Shy", duration_secs: 4.5, is_dance: false },
-    Emote { id: "emote-laughing", name: "Laugh", duration_secs: 2.7, is_dance: false },
-    Emote { id: "emote-sad", name: "Sad", duration_secs: 5.4, is_dance: false },
-    Emote { id: "emote-angry", name: "Angry", duration_secs: 5.8, is_dance: false },
-    Emote { id: "emote-tired", name: "Tired", duration_secs: 4.6, is_dance: false },
-    Emote { id: "emote-greedy", name: "Greedy", duration_secs: 4.6, is_dance: false },
-    Emote { id: "emote-model", name: "Model", duration_secs: 6.5, is_dance: false },
-    Emote { id: "emote-bow", name: "Bow", duration_secs: 3.3, is_dance: false },
-    Emote { id: "emote-curtsy", name: "Curtsy", duration_secs: 2.4, is_dance: false },
-    Emote { id: "emote-cute", name: "Cute", duration_secs: 6.2, is_dance: false },
-    Emote { id: "emote-energyball", name: "Energy Ball", duration_secs: 7.6, is_dance: false },
-    Emote { id: "emote-float", name: "Float", duration_secs: 9.0, is_dance: false },
-    Emote { id: "emote-frog", name: "Frog", duration_secs: 14.5, is_dance: false },
-    Emote { id: "emote-teleporting", name: "Teleporting", duration_secs: 11.8, is_dance: false },
-    Emote { id: "emote-gravity", name: "Gravity", duration_secs: 9.0, is_dance: false },
-    Emote { id: "emote-swordfight", name: "Swordfight", duration_secs: 5.9, is_dance: false },
-    Emote { id: "emote-celebrate", name: "Celebrate", duration_secs: 3.4, is_dance: false },
-    Emote { id: "emote-clap", name: "Clap", duration_secs: 2.1, is_dance: false },
-    Emote { id: "emote-thumbsup", name: "Thumbs Up", duration_secs: 2.7, is_dance: false },
-    Emote { id: "idle-loop-tapdance", name: "Tap Loop", duration_secs: 6.3, is_dance: true },
-    Emote { id: "idle-enthusiastic", name: "Enthusiastic", duration_secs: 15.9, is_dance: false },
-    Emote { id: "idle-posh", name: "Posh", duration_secs: 21.9, is_dance: false },
-    Emote { id: "sit-idle-cute", name: "Rest", duration_secs: 17.1, is_dance: false },
-    Emote { id: "emoji-ghost", name: "Ghost", duration_secs: 3.5, is_dance: false },
-    Emote { id: "emoji-poop", name: "Poop", duration_secs: 4.8, is_dance: false },
-];
 
 impl Default for Emotes {
     fn default() -> Self {
@@ -70,14 +56,91 @@ impl Default for Emotes {
 }
 
 impl Emotes {
+    /// Loads the default 280-emote `Free` pack.
     pub fn new() -> Self {
+        Self::from_pack(EmotePack::Free)
+    }
+
+    /// Loads either `EmotePack::Free` (280 free emotes) or `EmotePack::All` (371 free+paid).
+    pub fn from_pack(pack: EmotePack) -> Self {
+        let free_ids: HashSet<String> = Self::parse_json(FREE_EMOTES_JSON)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|e| e.id.to_ascii_lowercase())
+            .collect();
+
+        let mut items = match pack {
+            EmotePack::Free => Self::parse_json(FREE_EMOTES_JSON).unwrap_or_default(),
+            EmotePack::All => Self::parse_json(ALL_EMOTES_JSON).unwrap_or_default(),
+        };
+        for item in &mut items {
+            item.is_free = pack == EmotePack::Free || free_ids.contains(&item.id.to_ascii_lowercase());
+        }
+
         Self {
-            items: STANDARD_EMOTES.to_vec(),
+            items,
             blocked: HashSet::new(),
         }
     }
 
-    /// Blocks an emote by ID or name (useful to suppress unwanted triggers like `yes`/`no`).
+    /// Builds a catalog from any JSON array of `{ id, name, duration }`.
+    pub fn from_json(json_str: &str) -> Result<Self> {
+        Ok(Self {
+            items: Self::parse_json(json_str)?,
+            blocked: HashSet::new(),
+        })
+    }
+
+    /// Imports/merges emotes from a JSON string (deduplicating by `id`).
+    pub fn import_json(&mut self, json_str: &str) -> Result<usize> {
+        let incoming = Self::parse_json(json_str)?;
+        let mut seen: HashSet<String> = self
+            .items
+            .iter()
+            .map(|e| e.id.to_ascii_lowercase())
+            .collect();
+        let mut added = 0;
+        for item in incoming {
+            if seen.insert(item.id.to_ascii_lowercase()) {
+                self.items.push(item);
+                added += 1;
+            }
+        }
+        Ok(added)
+    }
+
+    /// Fetches and merges an emote JSON array from a remote URL (e.g. a GitHub raw URL).
+    pub async fn import_from_url(&mut self, url: &str) -> Result<usize> {
+        let text = reqwest::get(url).await?.error_for_status()?.text().await?;
+        self.import_json(&text)
+    }
+
+    /// Fetches the latest live emote list from `Djxhknz/Ids-highrise` (`DEFAULT_EMOTES_URL`),
+    /// falling back to the bundled `pack` if the network is unavailable.
+    pub async fn sync_pack(pack: EmotePack) -> Self {
+        let mut catalog = match pack {
+            EmotePack::Free => Self {
+                items: Vec::new(),
+                blocked: HashSet::new(),
+            },
+            EmotePack::All => Self::from_pack(EmotePack::All),
+        };
+        if catalog.import_from_url(DEFAULT_EMOTES_URL).await.is_err() && catalog.items.is_empty() {
+            return Self::from_pack(pack);
+        }
+        if pack == EmotePack::Free {
+            for item in &mut catalog.items {
+                item.is_free = true;
+            }
+        }
+        catalog
+    }
+
+    fn parse_json(json_str: &str) -> Result<Vec<Emote>> {
+        Ok(serde_json::from_str::<Vec<Emote>>(json_str)?)
+    }
+
+    /// Blocks an emote by ID or name (e.g. `yes`, `no`, `hello`, `hi`).
     pub fn block(&mut self, id_or_name: impl Into<String>) {
         self.blocked.insert(id_or_name.into().to_ascii_lowercase());
     }
@@ -93,9 +156,14 @@ impl Emotes {
             .collect()
     }
 
+    /// Returns only free non-blocked emotes.
+    pub fn free_only(&self) -> Vec<&Emote> {
+        self.allowed().into_iter().filter(|e| e.is_free).collect()
+    }
+
     /// Returns only dance emotes that are not blocked.
     pub fn dances(&self) -> Vec<&Emote> {
-        self.allowed().into_iter().filter(|e| e.is_dance).collect()
+        self.allowed().into_iter().filter(|e| e.is_dance()).collect()
     }
 
     /// Resolves an emote by 1-based number (`"1"`), exact ID, or case-insensitive name.

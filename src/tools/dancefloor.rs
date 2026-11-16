@@ -195,7 +195,7 @@ impl DanceFloorManager {
 
         let shared_emote = match &mode {
             DanceMode::Fixed(id) => Some(id.as_str()),
-            DanceMode::SyncRandom => emotes.pick_random(dances_only, base_seed).map(|e| e.id),
+            DanceMode::SyncRandom => emotes.pick_random(dances_only, base_seed).map(|e| e.id.as_str()),
             DanceMode::PerUserRandom => None,
         };
 
@@ -203,7 +203,7 @@ impl DanceFloorManager {
             let emote_id = match shared_emote {
                 Some(id) => id,
                 None => match emotes.pick_random(dances_only, base_seed.wrapping_add(ix as u64 * 31)) {
-                    Some(e) => e.id,
+                    Some(e) => e.id.as_str(),
                     None => continue,
                 },
             };

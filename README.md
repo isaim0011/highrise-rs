@@ -8,7 +8,8 @@ Fast, async Rust SDK for the **Highrise Bot WebSocket API**, **Highrise Web REST
 - **Production Bot Tools (`highrise_rs::tools`)**:
   - `CommandManager`: Multi-prefix, longest-match subcommands, aliases, `Role` hierarchy (`Member < Vip < Mod < Owner < Creator`), runtime overrides, and cooldowns.
   - `DanceFloorManager`: 3D bounding-box zones (`Fixed`, `SyncRandom`, `PerUserRandom`) + `set_zone_from_users()`.
-  - `Emotes`: Standard Highrise emote catalog with lookup by number, ID, or name + `block()`.
+  - `Emotes`: Live-syncing via `Emotes::sync_pack(EmotePack::Free | EmotePack::All)` from `Djxhknz/Ids-highrise` (with bundled `280` free & `371` free+paid fallback), `import_json()`, `import_from_url()`, `block()`, and lookup by number, ID, or name.
+  - `ItemCatalog`: Live-syncing `untradable_items_new.json` from `Djxhknz/Ids-highrise` (`ItemCatalog::sync_from_github()`), `search()`, `by_category()`, and `to_outfit_item()`.
   - `HighriseCluster`: Multi-bot Tokio supervisor with `ClusterHandle::shutdown()` and live status tracking.
   - **Dynamic DX helpers**: `find_user("@name")`, `user_position("@name")`, `goto_user("@name")`, `bring_user("@target", "@dest")`, `emote_user("1", "@target", &emotes)`.
 - **Built-in MCP Server (`highrise_mcp`)**: Offline docs, endpoint lookup, safe Highrise `<#RRGGBB>` hex color formatting, Unicode bold, and `<= 250`-char message chunking.

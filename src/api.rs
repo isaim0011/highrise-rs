@@ -534,6 +534,6 @@ impl Highrise {
             .find_user(target_name_or_id)
             .await?
             .ok_or_else(|| Error::Server(format!("user not found: {target_name_or_id}")))?;
-        self.emote(emote.id, target.user.id).await
+        self.emote(emote.id.as_str(), target.user.id).await
     }
 }

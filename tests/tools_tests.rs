@@ -2,19 +2,44 @@ use std::time::Duration;
 
 use highrise_rs::{
     BotSpec, CommandError, CommandManager, CommandMeta, Config, DanceFloorManager, DanceFloorZone,
-    DanceMode, Emotes, EntityPosition, Facing, HighriseCluster, Position, Role, User,
+    DanceMode, EmotePack, Emotes, EntityPosition, Facing, HighriseCluster, ItemCatalog, Position,
+    Role, User,
 };
 
 #[test]
-fn emotes_catalog_resolves_and_blocks() {
-    let mut emotes = Emotes::new();
-    assert!(emotes.resolve("1").is_some());
-    assert_eq!(emotes.resolve("Macarena").unwrap().id, "dance-macarena");
-    assert_eq!(emotes.resolve("emote-wave").unwrap().name, "Wave");
+fn item_catalog_parses_and_converts_to_outfit_item() {
+    let json = r#"[{"id":"bag-n_aura1","name":"Aquamarine Aura","rarity":"common","category":"aura"}]"#;
+    let catalog = ItemCatalog::from_json(json).unwrap();
+    assert_eq!(catalog.len(), 1);
+    let hits = catalog.search("aquamarine");
+    assert_eq!(hits.len(), 1);
+    assert_eq!(catalog.by_category("aura").len(), 1);
+    let outfit_item = hits[0].to_outfit_item(0);
+    assert_eq!(outfit_item.item_type, "clothing");
+    assert_eq!(outfit_item.id, "bag-n_aura1");
+}
 
-    emotes.block("emote-wave");
-    assert!(emotes.resolve("emote-wave").is_none());
-    assert!(!emotes.dances().is_empty());
+#[test]
+fn emotes_catalog_resolves_and_blocks() {
+    let mut free = Emotes::from_pack(EmotePack::Free);
+    assert_eq!(free.allowed().len(), 280);
+    assert!(free.resolve("1").is_some());
+    assert_eq!(free.resolve("zombie").unwrap().id, "idle_zombie");
+    assert_eq!(free.resolve("emote-wave").unwrap().id, "emote-wave");
+
+    free.block("emote-wave");
+    assert!(free.resolve("emote-wave").is_none());
+    assert!(!free.dances().is_empty());
+
+    let mut all = Emotes::from_pack(EmotePack::All);
+    assert_eq!(all.allowed().len(), 371);
+    assert!(all.free_only().len() <= 280);
+
+    let added = all
+        .import_json(r#"[{"id":"emote-custom-test","name":"Custom","duration":4.0}]"#)
+        .unwrap();
+    assert_eq!(added, 1);
+    assert_eq!(all.resolve("Custom").unwrap().id, "emote-custom-test");
 }
 
 #[tokio::test]

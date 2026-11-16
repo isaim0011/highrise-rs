@@ -16,8 +16,9 @@ pub use client::{BotHandler, BoxFuture, Client, Config};
 pub use error::{Error, Result};
 pub use protocol::{WsEvent, WsRequest};
 pub use tools::{
-    BotSpec, BotStatus, ClusterHandle, CommandContext, CommandError, CommandManager, CommandMeta,
-    DanceFloorManager, DanceFloorZone, DanceMode, Emote, Emotes, HighriseCluster, Role,
+    BotSpec, BotStatus, CatalogItem, ClusterHandle, CommandContext, CommandError, CommandManager,
+    CommandMeta, DanceFloorManager, DanceFloorZone, DanceMode, Emote, EmotePack, Emotes,
+    HighriseCluster, ItemCatalog, Role, DEFAULT_EMOTES_URL, DEFAULT_ITEMS_URL,
 };
 pub use types::{
     AnchorPosition, BuyResult, Conversation, CurrencyItem, DirectMessage, EntityPosition, Facing,
