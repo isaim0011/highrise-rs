@@ -17,6 +17,8 @@ use crate::protocol::{WsEvent, WsRequest};
 
 const WS_BASE_URL: &str = "wss://highrise.game/web/botapi";
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(15);
+const READ_TIMEOUT: Duration = Duration::from_secs(45);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value>>>>>;
@@ -51,7 +53,9 @@ impl Transport {
             room_id.parse().map_err(|_| Error::Config("invalid room-id header".into()))?,
         );
 
-        let (ws_stream, _) = connect_async(req).await?;
+        let (ws_stream, _) = time::timeout(CONNECT_TIMEOUT, connect_async(req))
+            .await
+            .map_err(|_| Error::Timeout("websocket connect".into()))??;
         let (mut ws_sink, mut ws_source) = ws_stream.split();
 
         let (out_tx, mut out_rx) = mpsc::channel::<String>(128);
@@ -93,8 +97,17 @@ impl Transport {
         // Reader task: resolves pending `rid` acks first, else emits `WsEvent`.
         let reader_pending = Arc::clone(&pending);
         tokio::spawn(async move {
-            while let Some(frame) = ws_source.next().await {
-                match frame {
+            loop {
+                let next_frame = match time::timeout(READ_TIMEOUT, ws_source.next()).await {
+                    Ok(Some(frame)) => frame,
+                    Ok(None) => break,
+                    Err(_) => {
+                        warn!("no websocket frames or keepalive responses for {READ_TIMEOUT:?}; closing zombie connection");
+                        let _ = evt_tx.send(Err(Error::Timeout("keepalive read".into()))).await;
+                        break;
+                    }
+                };
+                match next_frame {
                     Ok(Message::Text(text)) => {
                         let raw: Value = match serde_json::from_str(&text) {
                             Ok(v) => v,
