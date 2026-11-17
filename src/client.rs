@@ -209,7 +209,7 @@ impl<H: BotHandler> Client<H> {
                         loop {
                             match api_w.room_users().await {
                                 Ok(users) => {
-                                    if users.iter().any(|(u, _)| u.id == bid) {
+                                    if users.iter().any(|ru| ru.user.id == bid) {
                                         misses = 0;
                                     } else {
                                         misses = misses.saturating_add(1);
