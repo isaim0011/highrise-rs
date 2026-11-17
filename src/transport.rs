@@ -20,6 +20,7 @@ const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(15);
 const READ_TIMEOUT: Duration = Duration::from_secs(45);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_SESSION_AGE: Duration = Duration::from_secs(1500); // 25m proactive refresh before Highrise 30m ghost timeout
 
 type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value>>>>>;
 
@@ -97,7 +98,12 @@ impl Transport {
         // Reader task: resolves pending `rid` acks first, else emits `WsEvent`.
         let reader_pending = Arc::clone(&pending);
         tokio::spawn(async move {
+            let session_deadline = time::Instant::now() + MAX_SESSION_AGE;
             loop {
+                if time::Instant::now() >= session_deadline {
+                    debug!("proactive 25m session refresh to prevent Highrise ghost session");
+                    break;
+                }
                 let next_frame = match time::timeout(READ_TIMEOUT, ws_source.next()).await {
                     Ok(Some(frame)) => frame,
                     Ok(None) => break,
