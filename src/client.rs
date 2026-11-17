@@ -1,7 +1,9 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
+use tokio::sync::Notify;
 use tokio::time;
 use tracing::{error, info, warn};
 
@@ -168,9 +170,23 @@ impl<H: BotHandler> Client<H> {
         .await?;
 
         let mut api = Highrise::new(transport.clone(), String::new());
+        let notify_reconnect = Arc::new(Notify::new());
+        let mut watchdog: Option<tokio::task::JoinHandle<()>> = None;
 
-        while let Some(item) = events.recv().await {
-            let evt = item?;
+        let res: Result<()> = loop {
+            let item = tokio::select! {
+                maybe = events.recv() => match maybe {
+                    Some(it) => it,
+                    None => break Ok(()),
+                },
+                _ = notify_reconnect.notified() => {
+                    break Ok(());
+                }
+            };
+            let evt = match item {
+                Ok(e) => e,
+                Err(e) => break Err(e),
+            };
             match evt {
                 WsEvent::SessionMetadata {
                     user_id,
@@ -181,6 +197,44 @@ impl<H: BotHandler> Client<H> {
                 } => {
                     info!(bot_id = %user_id, room = %room_info.room_name, "connected to highrise");
                     api = Highrise::new(transport.clone(), user_id.clone());
+                    if let Some(h) = watchdog.take() {
+                        h.abort();
+                    }
+                    let api_w = api.clone();
+                    let bid = user_id.clone();
+                    let nr = Arc::clone(&notify_reconnect);
+                    watchdog = Some(tokio::spawn(async move {
+                        time::sleep(Duration::from_secs(10)).await;
+                        let mut misses: u8 = 0;
+                        loop {
+                            match api_w.room_users().await {
+                                Ok(users) => {
+                                    if users.iter().any(|(u, _)| u.id == bid) {
+                                        misses = 0;
+                                    } else {
+                                        misses = misses.saturating_add(1);
+                                        warn!(bot_id = %bid, misses, "bot missing from room_users");
+                                        if misses >= 2 {
+                                            warn!(bot_id = %bid, "bot invisible/missing from room_users for 2 checks; forcing reconnect");
+                                            nr.notify_one();
+                                            break;
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    misses = misses.saturating_add(1);
+                                    warn!(bot_id = %bid, misses, "room_users presence check failed: {e}");
+                                    if misses >= 3 {
+                                        warn!(bot_id = %bid, "room_users check failed 3 times; forcing reconnect");
+                                        nr.notify_one();
+                                        break;
+                                    }
+                                }
+                            }
+                            time::sleep(Duration::from_secs(15)).await;
+                        }
+                    }));
+
                     let meta = SessionMetadata {
                         user_id,
                         room_info,
@@ -246,8 +300,11 @@ impl<H: BotHandler> Client<H> {
                 }
                 WsEvent::KeepaliveResponse {} | WsEvent::Error { .. } | WsEvent::Unknown => {}
             }
-        }
+        };
 
-        Ok(())
+        if let Some(h) = watchdog.take() {
+            h.abort();
+        }
+        res
     }
 }
