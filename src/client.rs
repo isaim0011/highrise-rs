@@ -135,6 +135,7 @@ impl<H: BotHandler> Client<H> {
         let mut backoff = self.config.reconnect_min;
 
         loop {
+            let started = std::time::Instant::now();
             match self.run_once().await {
                 Ok(()) => {
                     // Clean server close (e.g. empty room hibernation); reset backoff.
@@ -146,6 +147,9 @@ impl<H: BotHandler> Client<H> {
                     return Err(Error::Fatal(msg));
                 }
                 Err(e) => {
+                    if started.elapsed() >= Duration::from_secs(30) {
+                        backoff = self.config.reconnect_min;
+                    }
                     warn!("connection error ({e}); reconnecting in {:?}", backoff);
                 }
             }
