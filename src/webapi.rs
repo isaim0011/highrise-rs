@@ -69,9 +69,15 @@ impl WebApi {
     }
 
     pub fn with_base_url(base_url: impl Into<String>) -> Self {
+        let mut builder = HttpClient::builder();
+        if let Ok(ip_str) = std::env::var("BIND_SOURCE_IP") {
+            if let Ok(ip) = ip_str.parse::<std::net::IpAddr>() {
+                builder = builder.local_address(ip);
+            }
+        }
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
-            http: HttpClient::new(),
+            http: builder.build().unwrap_or_default(),
         }
     }
 

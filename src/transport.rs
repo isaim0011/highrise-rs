@@ -6,7 +6,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::time;
-use tokio_tungstenite::connect_async;
+use tokio_tungstenite::{connect_async, client_async_tls};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, warn};
@@ -54,7 +54,35 @@ impl Transport {
             room_id.parse().map_err(|_| Error::Config("invalid room-id header".into()))?,
         );
 
-        let (ws_stream, _) = time::timeout(CONNECT_TIMEOUT, connect_async(req))
+        let bind_ip = std::env::var("BIND_SOURCE_IP").ok().and_then(|s| s.parse::<std::net::IpAddr>().ok());
+
+        let (ws_stream, _) = time::timeout(CONNECT_TIMEOUT, async {
+            if let Some(ip) = bind_ip {
+                let host = req.uri().host().ok_or_else(|| Error::Config("missing host in ws url".into()))?;
+                let port = req.uri().port_u16().unwrap_or(443);
+                let target = tokio::net::lookup_host((host, port))
+                    .await
+                    .map_err(|e| Error::Config(e.to_string()))?
+                    .next()
+                    .ok_or_else(|| Error::Config("dns lookup returned no addresses".into()))?;
+                let socket = if target.is_ipv4() {
+                    tokio::net::TcpSocket::new_v4()
+                } else {
+                    tokio::net::TcpSocket::new_v6()
+                }
+                .map_err(|e| Error::Config(e.to_string()))?;
+                socket
+                    .bind(std::net::SocketAddr::new(ip, 0))
+                    .map_err(|e| Error::Config(format!("failed to bind source ip {ip}: {e}")))?;
+                let tcp_stream = socket.connect(target).await.map_err(|e| Error::Config(e.to_string()))?;
+                let (stream, resp) = client_async_tls(req, tcp_stream)
+                    .await
+                    .map_err(Error::from)?;
+                Ok::<_, Error>((stream, resp))
+            } else {
+                connect_async(req).await.map_err(Error::from)
+            }
+        })
             .await
             .map_err(|_| Error::Timeout)??;
         let (mut ws_sink, mut ws_source) = ws_stream.split();
