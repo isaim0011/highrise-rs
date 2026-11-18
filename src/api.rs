@@ -23,6 +23,24 @@ impl Highrise {
         Self { transport, bot_id }
     }
 
+    /// Forces the current connection to drop and reconnect with a brand new
+    /// session/handshake, even though the connection is otherwise healthy.
+    ///
+    /// Use this when application-level context gives you a reason to distrust
+    /// the current session that the transport layer itself has no way to
+    /// detect -- e.g. Highrise occasionally stops rendering/registering a bot
+    /// as present in a room while the underlying connection stays perfectly
+    /// healthy (no timeouts, no protocol errors). A fresh reconnect reliably
+    /// clears this; this method lets you trigger one proactively, for example
+    /// from `on_join` when a user arrives and you want to make sure the bot
+    /// is freshly visible rather than waiting for a periodic timer.
+    ///
+    /// This only requests a reconnect; it does not wait for it to complete.
+    /// The reconnect itself is near-instant (typically under a second).
+    pub fn force_reconnect(&self) {
+        self.transport.notify_reconnect.notify_one();
+    }
+
     /// Sends a public message in room chat.
     pub async fn chat(&self, message: impl Into<String>) -> Result<()> {
         self.transport

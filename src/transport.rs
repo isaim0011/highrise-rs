@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify};
 use tokio::time;
 use tokio_tungstenite::{connect_async, client_async_tls};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -29,6 +29,12 @@ type PendingMap = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value>>>>>;
 pub struct Transport {
     outbound: mpsc::Sender<String>,
     pending: PendingMap,
+    /// Signaled to force this connection's run loop to drop and reconnect,
+    /// even though the connection is otherwise healthy. Used when the
+    /// application layer has a reason to distrust the current session (e.g.
+    /// a user just joined and the bot hasn't been confirmed visible/fresh
+    /// recently) that the transport/protocol layer itself can't detect.
+    pub(crate) notify_reconnect: Arc<Notify>,
 }
 
 impl Transport {
@@ -91,9 +97,11 @@ impl Transport {
         let (evt_tx, evt_rx) = mpsc::channel::<Result<WsEvent>>(256);
         let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
 
+        let notify_reconnect = Arc::new(Notify::new());
         let transport = Self {
             outbound: out_tx.clone(),
             pending: Arc::clone(&pending),
+            notify_reconnect: Arc::clone(&notify_reconnect),
         };
 
         // Writer + 15s keepalive ticker in one task so WS sink never contends.

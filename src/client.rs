@@ -3,7 +3,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::Notify;
 use tokio::time;
 use tracing::{error, info, warn};
 
@@ -170,7 +169,7 @@ impl<H: BotHandler> Client<H> {
         .await?;
 
         let mut api = Highrise::new(transport.clone(), String::new());
-        let notify_reconnect = Arc::new(Notify::new());
+        let notify_reconnect = Arc::clone(&transport.notify_reconnect);
         let mut watchdog: Option<tokio::task::JoinHandle<()>> = None;
 
         let res: Result<()> = loop {
