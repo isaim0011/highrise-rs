@@ -86,8 +86,50 @@ const DOCS: &[DocEntry] = &[
         section: "guides",
         title: "Empty Room Hibernation (code 1006) & Auto-Reconnect",
         body: "Highrise closes empty room instances and drops bot WebSockets with code 1006.\n\
-               highrise-rs Client::run() automatically reconnects with exponential backoff (2s..30s) \
-               and stops only on fatal auth/permission errors (invalid token, missing designer rights).",
+               highrise-rs Client::run() automatically reconnects with exponential backoff \
+               (500ms..3s as of 0.1.5; was 2s..30s before that) and stops only on fatal \
+               auth/permission errors (invalid token, missing designer rights).\n\
+               Before 0.1.5 the slower 30s cap meant that when several bots on one host all \
+               got disconnected by the same hibernation event, they could drift tens of \
+               seconds out of sync on reconnect -- whichever bot's retry timer happened to \
+               fire first would reappear immediately while the others sat mid-sleep, which \
+               looked like \"only one bot comes back, the others stay invisible\" when a room \
+               woke back up. Upgrading past 0.1.4 fixes this on its own, no code changes needed.\n\
+               Separately: Client::run()'s internal room_users()-based \"ghost session\" \
+               presence watchdog was removed as a reconnect trigger in 0.1.7. Bot accounts are \
+               routinely absent from their own room_users() roster entirely (this is normal \
+               platform behavior, not a sign of a stuck session), so versions before 0.1.7 \
+               could force an unnecessary reconnect roughly every ~90s forever, which itself \
+               risked colliding with the server's not-yet-expired prior session as a spurious \
+               Multilogin error. 0.1.7+ still polls room_users() for diagnostics but no longer \
+               treats self-absence as actionable; real disconnects are caught by the normal \
+               websocket read loop regardless.",
+    },
+    DocEntry {
+        id: "multi_bot_same_host_multilogin",
+        section: "guides",
+        title: "Running Multiple Bots On One Host: Avoiding Multilogin Collisions",
+        body: "Symptom: two or more highrise-rs bots (distinct accounts/tokens) hosted on the \
+               same machine and joining the same room repeatedly swap/kick each other -- one \
+               bot's avatar vanishes when another connects, both show 'connected' in logs but \
+               only one is visible in-room, and the WARN log line \"server error event: \
+               Multilogin\" appears. This is Highrise flagging multiple simultaneous bot \
+               sessions originating from the SAME outbound IP address as a session conflict, \
+               not a bug in any individual bot's token or room_id. It is a known, common issue \
+               reported by multiple unrelated developers hosting multi-bot setups on a single \
+               VPS/server (Oracle Cloud, Railway, etc.) -- splitting bots across different \
+               hosts (different outbound IPs) has reliably fixed it for others.\n\
+               Fix without extra servers: as of 0.1.5, both Transport::connect (the bot-api \
+               websocket) and WebApi::new()/with_base_url (the webapi.highrise.game REST \
+               client) check the BIND_SOURCE_IP environment variable at connect time; when set \
+               to a valid IP, outbound sockets bind to that address instead of the host's \
+               default route. Give each bot process a distinct local IP -- e.g. on a cloud VM, \
+               attach a secondary VNIC (its own public IP) for one bot and/or add a secondary \
+               private IP with a reserved public IP on the primary NIC for another -- then set \
+               BIND_SOURCE_IP=<that bot's local IP> in each bot's own environment (per-process \
+               env var or systemd Environment= line, not a single shared .env file read by all \
+               bots, since that would defeat the point). No application code changes needed \
+               beyond upgrading highrise-rs and setting the env var.",
     },
     DocEntry {
         id: "tools_and_dynamic_dx",

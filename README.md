@@ -50,3 +50,43 @@ async fn main() {
 ```bash
 cargo run --bin highrise_mcp
 ```
+
+## Running multiple bots on one host (avoiding Multilogin collisions)
+
+If you run two or more bots (distinct accounts/tokens) from the same machine and
+have them join the same room, Highrise can flag the simultaneous sessions from
+one outbound IP as a conflict: bots swap/kick each other, and you'll see
+`server error event: Multilogin` in the logs. This is a platform-side,
+IP-based check, not a bug in any one bot's token or room ID — it's a known
+issue reported by multiple unrelated developers hosting multi-bot setups on a
+single VPS.
+
+As of `0.1.5`, set the `BIND_SOURCE_IP` environment variable per bot process to
+give each one a distinct outbound IP (e.g. a secondary VNIC or a secondary
+private IP with its own reserved public IP on a cloud VM):
+
+```bash
+# bot A
+BIND_SOURCE_IP=10.0.0.21 ./bot-a
+
+# bot B (different local IP, e.g. a secondary VNIC's address)
+BIND_SOURCE_IP=10.0.0.253 ./bot-b
+```
+
+Both the bot-api websocket (`Transport::connect`) and the `WebApi` REST client
+honor this automatically — no other code changes needed. Set it per-process
+(systemd `Environment=`, not one shared `.env` read by every bot), or the fix
+won't do anything.
+
+## Changelog highlights
+
+- **0.1.7** — The internal `room_users()`-based "ghost session" watchdog no
+  longer forces a reconnect on its own. In production, bot accounts are often
+  simply absent from their own room roster (expected, not a stuck session),
+  so the old check could force an unnecessary reconnect roughly every ~90s
+  indefinitely, which itself risked a spurious `Multilogin` collision with
+  the bot's own not-yet-closed prior session.
+- **0.1.5** — Added opt-in `BIND_SOURCE_IP` support (see above) and lowered
+  the default reconnect backoff from `2s..30s` to `500ms..3s`, so multiple
+  bots recover together within a few seconds of an empty-room hibernation
+  instead of drifting tens of seconds apart.
