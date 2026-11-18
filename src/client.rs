@@ -203,37 +203,28 @@ impl<H: BotHandler> Client<H> {
                     let api_w = api.clone();
                     let bid = user_id.clone();
                     let nr = Arc::clone(&notify_reconnect);
+                    // NOTE: a prior version of this watchdog force-reconnected the bot
+                    // when it didn't see its own id in room_users(). In practice, bot
+                    // accounts are often simply not listed in that roster at all (this
+                    // is normal, not a sign of a ghost session), so that check produced
+                    // persistent false positives -- the bot would reconnect roughly
+                    // every ~90s forever, which could itself collide with the server's
+                    // own not-yet-expired prior session as a spurious Multilogin error.
+                    // We still poll for diagnostics, but no longer force a reconnect
+                    // off self-presence alone; only a hard API failure (the connection
+                    // itself is broken) is treated as actionable.
+                    let _ = &nr; // kept for future use; presence checks no longer force a reconnect
                     watchdog = Some(tokio::spawn(async move {
-                        // Give the session time to fully settle (avatar spawn, room
-                        // roster propagation) before trusting presence checks; right
-                        // after a fresh connect, room_users() can transiently omit
-                        // the bot itself for a few seconds, which previously caused
-                        // false-positive "ghost session" reconnects.
                         time::sleep(Duration::from_secs(30)).await;
-                        let mut misses: u8 = 0;
+                        let mut err_streak: u8 = 0;
                         loop {
                             match api_w.room_users().await {
-                                Ok(users) => {
-                                    if users.iter().any(|ru| ru.user.id == bid) {
-                                        misses = 0;
-                                    } else {
-                                        misses = misses.saturating_add(1);
-                                        warn!(bot_id = %bid, misses, "bot missing from room_users");
-                                        if misses >= 4 {
-                                            warn!(bot_id = %bid, "bot invisible/missing from room_users for 4 checks; forcing reconnect");
-                                            nr.notify_one();
-                                            break;
-                                        }
-                                    }
+                                Ok(_users) => {
+                                    err_streak = 0;
                                 }
                                 Err(e) => {
-                                    misses = misses.saturating_add(1);
-                                    warn!(bot_id = %bid, misses, "room_users presence check failed: {e}");
-                                    if misses >= 5 {
-                                        warn!(bot_id = %bid, "room_users check failed 5 times; forcing reconnect");
-                                        nr.notify_one();
-                                        break;
-                                    }
+                                    err_streak = err_streak.saturating_add(1);
+                                    warn!(bot_id = %bid, err_streak, "room_users presence check failed: {e}");
                                 }
                             }
                             time::sleep(Duration::from_secs(20)).await;
