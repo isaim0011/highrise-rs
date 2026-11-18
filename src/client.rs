@@ -203,45 +203,28 @@ impl<H: BotHandler> Client<H> {
                     let api_w = api.clone();
                     let bid = user_id.clone();
                     let nr = Arc::clone(&notify_reconnect);
-                    // Ghost-session watchdog: Highrise bot accounts are frequently absent
-                    // from their own room_users() roster for reasons that have nothing to
-                    // do with connection health (this is normal, not an error), so a short
-                    // threshold here produces constant false-positive reconnects -- that
-                    // was the 0.1.7 bug. But real ghost sessions (connected websocket, bot
-                    // never actually rendered in-room) do happen and previously had no
-                    // automatic recovery at all. This strikes a safer balance: only force
-                    // a reconnect after ~5 minutes of CONTINUOUS self-absence (15 misses at
-                    // a 20s interval, after an initial 30s settle delay), which real ghost
-                    // sessions will hit but normal transient roster gaps will not.
-                    const PRESENCE_MISS_LIMIT: u32 = 15; // ~5 minutes at 20s interval
-                    const ERROR_STREAK_LIMIT: u32 = 10; // ~3.5 minutes of failed API calls
+                    // Ghost-session watchdog, diagnostics-only: confirmed in production
+                    // (2026-11-18) that self-absence from room_users() does NOT correlate
+                    // with real "connected but not rendered in-room" invisibility -- a
+                    // forced reconnect on this signal fired in lockstep across all bots on
+                    // a fixed ~5min cadence regardless of whether any bot was actually
+                    // visibly broken, and did not fix a real invisibility incident that
+                    // happened alongside it (only a manual process restart did). So this no
+                    // longer forces a reconnect at all; it only logs API-call health. If a
+                    // reliable ghost-session signal is found later, reintroduce the trigger
+                    // here rather than reusing room_users() self-presence.
+                    let _ = &nr;
                     watchdog = Some(tokio::spawn(async move {
                         time::sleep(Duration::from_secs(30)).await;
-                        let mut misses: u32 = 0;
                         let mut err_streak: u32 = 0;
                         loop {
                             match api_w.room_users().await {
-                                Ok(users) => {
+                                Ok(_users) => {
                                     err_streak = 0;
-                                    if users.iter().any(|ru| ru.user.id == bid) {
-                                        misses = 0;
-                                    } else {
-                                        misses = misses.saturating_add(1);
-                                        if misses >= PRESENCE_MISS_LIMIT {
-                                            warn!(bot_id = %bid, misses, "bot absent from room_users for ~5min; forcing reconnect (ghost session)");
-                                            nr.notify_one();
-                                            break;
-                                        }
-                                    }
                                 }
                                 Err(e) => {
                                     err_streak = err_streak.saturating_add(1);
                                     warn!(bot_id = %bid, err_streak, "room_users presence check failed: {e}");
-                                    if err_streak >= ERROR_STREAK_LIMIT {
-                                        warn!(bot_id = %bid, "room_users check failing repeatedly; forcing reconnect");
-                                        nr.notify_one();
-                                        break;
-                                    }
                                 }
                             }
                             time::sleep(Duration::from_secs(20)).await;
