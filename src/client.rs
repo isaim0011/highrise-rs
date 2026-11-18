@@ -203,18 +203,25 @@ impl<H: BotHandler> Client<H> {
                     let api_w = api.clone();
                     let bid = user_id.clone();
                     let nr = Arc::clone(&notify_reconnect);
-                    // Ghost-session watchdog, diagnostics-only: confirmed in production
-                    // (2026-11-18) that self-absence from room_users() does NOT correlate
-                    // with real "connected but not rendered in-room" invisibility -- a
-                    // forced reconnect on this signal fired in lockstep across all bots on
-                    // a fixed ~5min cadence regardless of whether any bot was actually
-                    // visibly broken, and did not fix a real invisibility incident that
-                    // happened alongside it (only a manual process restart did). So this no
-                    // longer forces a reconnect at all; it only logs API-call health. If a
-                    // reliable ghost-session signal is found later, reintroduce the trigger
-                    // here rather than reusing room_users() self-presence.
-                    let _ = &nr;
+                    // Ghost-session watchdog: self-absence from room_users() does NOT
+                    // correlate with real "connected but not rendered in-room"
+                    // invisibility (confirmed in production 2026-11-18 -- it fired in
+                    // lockstep across all bots on a fixed cadence regardless of actual
+                    // state), so it stays diagnostics-only here, not a reconnect trigger.
+                    //
+                    // What DOES reliably fix real invisibility incidents, confirmed
+                    // repeatedly in production: a full reconnect (brand new session/
+                    // handshake), even though the old connection looks perfectly healthy
+                    // at the protocol level (no timeouts, no errors, keepalives acked).
+                    // This points to Highrise's backend occasionally losing a bot's
+                    // room-membership registration independently of the connection
+                    // itself. Lacking a reliable signal to detect that server-side state
+                    // directly, run an unconditional periodic full reconnect as a blunt
+                    // preventive mitigation: cheap (a sub-second self-resolving blip) and
+                    // the only thing that has reliably self-healed this in practice.
+                    const PERIODIC_RECONNECT: Duration = Duration::from_secs(7 * 60);
                     watchdog = Some(tokio::spawn(async move {
+                        let connected_at = time::Instant::now();
                         time::sleep(Duration::from_secs(30)).await;
                         let mut err_streak: u32 = 0;
                         loop {
@@ -226,6 +233,11 @@ impl<H: BotHandler> Client<H> {
                                     err_streak = err_streak.saturating_add(1);
                                     warn!(bot_id = %bid, err_streak, "room_users presence check failed: {e}");
                                 }
+                            }
+                            if connected_at.elapsed() >= PERIODIC_RECONNECT {
+                                info!(bot_id = %bid, "periodic preventive reconnect (ghost-session mitigation)");
+                                nr.notify_one();
+                                break;
                             }
                             time::sleep(Duration::from_secs(20)).await;
                         }
