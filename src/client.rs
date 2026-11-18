@@ -29,8 +29,8 @@ impl Config {
         Self {
             api_token: api_token.into(),
             room_id: room_id.into(),
-            reconnect_min: Duration::from_secs(2),
-            reconnect_max: Duration::from_secs(30),
+            reconnect_min: Duration::from_millis(500),
+            reconnect_max: Duration::from_secs(3),
         }
     }
 }
