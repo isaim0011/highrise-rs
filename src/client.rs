@@ -204,7 +204,12 @@ impl<H: BotHandler> Client<H> {
                     let bid = user_id.clone();
                     let nr = Arc::clone(&notify_reconnect);
                     watchdog = Some(tokio::spawn(async move {
-                        time::sleep(Duration::from_secs(10)).await;
+                        // Give the session time to fully settle (avatar spawn, room
+                        // roster propagation) before trusting presence checks; right
+                        // after a fresh connect, room_users() can transiently omit
+                        // the bot itself for a few seconds, which previously caused
+                        // false-positive "ghost session" reconnects.
+                        time::sleep(Duration::from_secs(30)).await;
                         let mut misses: u8 = 0;
                         loop {
                             match api_w.room_users().await {
@@ -214,8 +219,8 @@ impl<H: BotHandler> Client<H> {
                                     } else {
                                         misses = misses.saturating_add(1);
                                         warn!(bot_id = %bid, misses, "bot missing from room_users");
-                                        if misses >= 2 {
-                                            warn!(bot_id = %bid, "bot invisible/missing from room_users for 2 checks; forcing reconnect");
+                                        if misses >= 4 {
+                                            warn!(bot_id = %bid, "bot invisible/missing from room_users for 4 checks; forcing reconnect");
                                             nr.notify_one();
                                             break;
                                         }
@@ -224,14 +229,14 @@ impl<H: BotHandler> Client<H> {
                                 Err(e) => {
                                     misses = misses.saturating_add(1);
                                     warn!(bot_id = %bid, misses, "room_users presence check failed: {e}");
-                                    if misses >= 3 {
-                                        warn!(bot_id = %bid, "room_users check failed 3 times; forcing reconnect");
+                                    if misses >= 5 {
+                                        warn!(bot_id = %bid, "room_users check failed 5 times; forcing reconnect");
                                         nr.notify_one();
                                         break;
                                     }
                                 }
                             }
-                            time::sleep(Duration::from_secs(15)).await;
+                            time::sleep(Duration::from_secs(20)).await;
                         }
                     }));
 
