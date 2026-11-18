@@ -80,12 +80,17 @@ won't do anything.
 
 ## Changelog highlights
 
+- **0.1.8** — Re-tuned the ghost-session watchdog: it now requires ~5 minutes
+  of *continuous* self-absence from `room_users()` (15 misses at a 20s
+  interval) before forcing a reconnect, instead of either the old 90s
+  false-positive threshold (0.1.6 and earlier) or no automatic recovery at
+  all (0.1.7). Real "connected but never rendered in-room" ghost sessions
+  self-heal within a few minutes; normal transient roster gaps do not trip it.
 - **0.1.7** — The internal `room_users()`-based "ghost session" watchdog no
-  longer forces a reconnect on its own. In production, bot accounts are often
-  simply absent from their own room roster (expected, not a stuck session),
-  so the old check could force an unnecessary reconnect roughly every ~90s
-  indefinitely, which itself risked a spurious `Multilogin` collision with
-  the bot's own not-yet-closed prior session.
+  longer forced a reconnect on its own. Removed entirely because the old
+  check fired constantly (every ~90s) on bots simply not being listed in
+  their own room roster, which is normal — but this also meant genuine
+  ghost sessions had no automatic recovery until 0.1.8.
 - **0.1.5** — Added opt-in `BIND_SOURCE_IP` support (see above) and lowered
   the default reconnect backoff from `2s..30s` to `500ms..3s`, so multiple
   bots recover together within a few seconds of an empty-room hibernation

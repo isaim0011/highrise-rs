@@ -96,14 +96,20 @@ const DOCS: &[DocEntry] = &[
                looked like \"only one bot comes back, the others stay invisible\" when a room \
                woke back up. Upgrading past 0.1.4 fixes this on its own, no code changes needed.\n\
                Separately: Client::run()'s internal room_users()-based \"ghost session\" \
-               presence watchdog was removed as a reconnect trigger in 0.1.7. Bot accounts are \
-               routinely absent from their own room_users() roster entirely (this is normal \
-               platform behavior, not a sign of a stuck session), so versions before 0.1.7 \
-               could force an unnecessary reconnect roughly every ~90s forever, which itself \
-               risked colliding with the server's not-yet-expired prior session as a spurious \
-               Multilogin error. 0.1.7+ still polls room_users() for diagnostics but no longer \
-               treats self-absence as actionable; real disconnects are caught by the normal \
-               websocket read loop regardless.",
+               presence watchdog has gone through a few tunings. Bot accounts are routinely \
+               absent from their own room_users() roster for a check or two (normal platform \
+               behavior, not a sign of a stuck session), so a short threshold produces \
+               persistent false positives: 0.1.6 and earlier force-reconnected after as little \
+               as ~40-90s of absence, which itself risked colliding with the server's \
+               not-yet-expired prior session as a spurious Multilogin error. 0.1.7 removed the \
+               reconnect trigger entirely (diagnostics-only), which stopped the false positives \
+               but also meant genuine ghost sessions (connected websocket, bot never actually \
+               rendered in-room) had no automatic recovery -- confirmed in practice: one \
+               occurred and needed a manual restart. 0.1.8 restores the auto-reconnect but only \
+               after ~5 minutes of CONTINUOUS self-absence (15 misses at a 20s interval), which \
+               is long enough that normal transient roster gaps don't trip it but real ghost \
+               sessions still self-heal within a few minutes instead of needing a manual \
+               restart. Use >= 0.1.8 for the best balance.",
     },
     DocEntry {
         id: "multi_bot_same_host_multilogin",
